@@ -155,7 +155,7 @@ Curated visual styles for Frontend Slides. Each preset is inspired by real desig
 - Paper container with subtle shadow
 - Colorful section tabs on right edge (vertical text)
 - Binder hole decorations on left
-- Tab text must scale with viewport: `font-size: clamp(0.5rem, 1vh, 0.7rem)`
+- Tab text uses a fixed stage size (about 11-12px at 1920×1080). Do not use `vh`/`clamp()` inside the stage
 
 ---
 
@@ -311,7 +311,9 @@ Curated visual styles for Frontend Slides. Each preset is inspired by real desig
 | Split Pastel | Outfit | Outfit | Google |
 | Vintage Editorial | Fraunces | Work Sans | Google |
 | Neon Cyber | Clash Display | Satoshi | Fontshare |
-| Terminal Green | JetBrains Mono | JetBrains Mono | JetBrains |
+| Terminal Green | JetBrains Mono | JetBrains Mono | Google |
+| Swiss Modern | Archivo | Nunito | Google |
+| Paper & Ink | Cormorant Garamond | Source Serif 4 | Google |
 
 ---
 

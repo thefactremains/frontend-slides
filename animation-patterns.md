@@ -6,7 +6,7 @@ Use this reference when generating presentations. Match animations to the intend
 
 | Feeling | Animations | Visual Cues |
 |---------|-----------|-------------|
-| **Dramatic / Cinematic** | Slow fade-ins (1-1.5s), large scale transitions (0.9 to 1), parallax scrolling | Dark backgrounds, spotlight effects, full-bleed images |
+| **Dramatic / Cinematic** | Slow fade-ins (1-1.5s), large scale transitions (0.9 to 1), layered parallax motion | Dark backgrounds, spotlight effects, full-bleed images |
 | **Techy / Futuristic** | Neon glow (box-shadow), glitch/scramble text, grid reveals | Particle systems (canvas), grid patterns, monospace accents, cyan/magenta/electric blue |
 | **Playful / Friendly** | Bouncy easing (spring physics), floating/bobbing | Rounded corners, pastel/bright colors, hand-drawn elements |
 | **Professional / Corporate** | Subtle fast animations (200-300ms), clean slides | Navy/slate/charcoal, precise spacing, data visualization focus |
@@ -34,12 +34,20 @@ Use this reference when generating presentations. Match animations to the intend
     transform: scale(0.9);
     transition: opacity 0.6s, transform 0.6s var(--ease-out-expo);
 }
+.visible .reveal-scale {
+    opacity: 1;
+    transform: scale(1);
+}
 
 /* Slide from Left */
 .reveal-left {
     opacity: 0;
     transform: translateX(-50px);
     transition: opacity 0.6s, transform 0.6s var(--ease-out-expo);
+}
+.visible .reveal-left {
+    opacity: 1;
+    transform: translateX(0);
 }
 
 /* Blur In */
@@ -48,6 +56,13 @@ Use this reference when generating presentations. Match animations to the intend
     filter: blur(10px);
     transition: opacity 0.8s, filter 0.8s var(--ease-out-expo);
 }
+.visible .reveal-blur {
+    opacity: 1;
+    filter: blur(0);
+}
+
+/* Every hidden start state needs a matching .visible end state,
+   or the element stays invisible forever. */
 ```
 
 ## Background Effects
@@ -104,7 +119,6 @@ class TiltEffect {
 | Problem | Fix |
 |---------|-----|
 | Fonts not loading | Check Fontshare/Google Fonts URL; ensure font names match in CSS |
-| Animations not triggering | Verify Intersection Observer is running; check `.visible` class is being added |
-| Scroll snap not working | Ensure `scroll-snap-type: y mandatory` on html; each slide needs `scroll-snap-align: start` |
-| Mobile issues | Disable heavy effects at 768px breakpoint; test touch events; reduce particle count |
-| Performance issues | Use `will-change` sparingly; prefer `transform`/`opacity` animations; throttle scroll handlers |
+| Animations not triggering | Check `showSlide()` adds `.visible` to the current slide, and that each hidden start state has a `.visible` end-state rule |
+| Mobile issues | Test touch/swipe; reduce particle count or disable heavy effects on small screens (never rearrange slide content — the stage only scales) |
+| Performance issues | Use `will-change` sparingly; prefer `transform`/`opacity` animations; throttle resize/wheel handlers |

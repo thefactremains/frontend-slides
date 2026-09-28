@@ -123,7 +123,10 @@ Reference architecture for generating slide presentations. Every presentation fo
             }
 
             setupKeyboardNav() {
-                // Arrow keys, Space, Page Up/Down
+                // Arrow keys, Space, Page Up/Down.
+                // Ignore keys while the user is typing in edit mode, otherwise
+                // Space/arrows inside an editable text change the slide:
+                // if (e.target.isContentEditable) return;
             }
 
             setupTouchNav() {
@@ -139,7 +142,8 @@ Reference architecture for generating slide presentations. Every presentation fo
             }
         }
 
-        new SlidePresentation();
+        // Expose the controller: scripts/export-pdf.sh calls window.presentation.showSlide(i)
+        window.presentation = new SlidePresentation();
     </script>
 </body>
 </html>
@@ -171,7 +175,7 @@ Every presentation must include:
 4. **Inline Editing** (included by default after draft generation):
    - Edit toggle button (hidden by default, revealed via hover hotzone or `E` key)
    - Auto-save to localStorage
-   - Export/save file functionality
+   - Export/save file functionality, bound to Ctrl/Cmd+S (Phase 5 tells the user this shortcut works)
    - See "Inline Editing Implementation" section below
 
 ## Inline Editing Implementation
@@ -247,9 +251,10 @@ hotzone.addEventListener('click', () => {
     editor.toggleEditMode();
 });
 
-// 4. Keyboard shortcut (E key, skip when editing text)
+// 4. Keyboard shortcut (E key, skip when editing text or when a modifier is held)
 document.addEventListener('keydown', (e) => {
-    if ((e.key === 'e' || e.key === 'E') && !e.target.getAttribute('contenteditable')) {
+    if ((e.key === 'e' || e.key === 'E') && !e.target.isContentEditable
+        && !e.metaKey && !e.ctrlKey && !e.altKey) {
         editor.toggleEditMode();
     }
 });
@@ -257,7 +262,7 @@ document.addEventListener('keydown', (e) => {
 
 ## Image Pipeline (Skip If No Images)
 
-If user chose "No images" in Phase 1, skip this entirely. If images were provided, process them before generating HTML.
+If the user provided no images, skip this entirely. If images were provided, process them before generating HTML.
 
 **Dependency:** `pip install Pillow`
 
@@ -303,9 +308,12 @@ Save processed images with `_processed` suffix. Never overwrite originals.
 ```
 
 ```css
+/* Sizes are in 1920×1080 stage pixels. Never use vh/vw inside the stage:
+   they track the browser window, not the scaled stage, so layout would
+   change per device. */
 .slide-image {
     max-width: 100%;
-    max-height: min(50vh, 400px);
+    max-height: 400px;
     object-fit: contain;
     border-radius: 8px;
 }
@@ -315,7 +323,7 @@ Save processed images with `_processed` suffix. Never overwrite originals.
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 .slide-image.logo {
-    max-height: min(30vh, 200px);
+    max-height: 200px;
 }
 ```
 

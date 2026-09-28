@@ -52,7 +52,8 @@ for arg in "$@"; do
             ;;
     esac
 done
-set -- "${POSITIONAL[@]}"
+# ${arr[@]+...} guard: macOS bash 3.2 treats an empty array as unbound under set -u
+set -- ${POSITIONAL[@]+"${POSITIONAL[@]}"}
 
 # ─── Input validation ─────────────────────────────────────
 
@@ -83,8 +84,11 @@ else
 fi
 
 # Resolve output to absolute path
+# (the script later cd's into a temp dir, so a relative path would land there
+# and be deleted with it)
 OUTPUT_DIR=$(dirname "$OUTPUT_PDF")
 mkdir -p "$OUTPUT_DIR"
+OUTPUT_DIR=$(cd "$OUTPUT_DIR" && pwd)
 OUTPUT_PDF="$OUTPUT_DIR/$(basename "$OUTPUT_PDF")"
 
 echo ""
@@ -145,6 +149,8 @@ const OUTPUT_PDF = process.argv[4];
 const SCREENSHOT_DIR = process.argv[5];
 const VP_WIDTH = parseInt(process.argv[6]) || 1920;
 const VP_HEIGHT = parseInt(process.argv[7]) || 1080;
+// Optional browser channel (e.g. 'chrome') when Playwright's bundled Chromium is unavailable
+const LAUNCH_OPTS = process.argv[8] ? { channel: process.argv[8] } : {};
 
 // ─── Simple static file server ────────────────────────────
 // (We need HTTP so that Google Fonts and relative assets load correctly)
@@ -190,7 +196,7 @@ console.log(`  Local server on port ${port}`);
 
 // ─── Screenshot each slide ────────────────────────────────
 
-const browser = await chromium.launch();
+const browser = await chromium.launch(LAUNCH_OPTS);
 const page = await browser.newPage({
   viewport: { width: VP_WIDTH, height: VP_HEIGHT },
 });
@@ -223,15 +229,30 @@ if (slideCount === 0) {
 mkdirSync(SCREENSHOT_DIR, { recursive: true });
 const screenshotPaths = [];
 
+// Freeze motion so every capture shows the final state of each slide.
+// Without this, entrance transitions (and their staggered delays) are still
+// running when the screenshot is taken, and later slides export half-faded.
+await page.addStyleTag({ content: `
+  *, *::before, *::after {
+    transition: none !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+` });
+
 for (let i = 0; i < slideCount; i++) {
   // Navigate to slide by simulating the presentation's navigation
-  // Most frontend-slides presentations use a currentSlide index and show/hide
   await page.evaluate((index) => {
     const slides = document.querySelectorAll('.slide');
 
-    // Try multiple navigation strategies used by frontend-slides:
+    // Strategy 1: Use the deck's own controller if it is exposed
+    const deck = window.presentation;
+    if (deck && typeof deck.showSlide === 'function') deck.showSlide(index);
+    else if (deck && typeof deck.goToSlide === 'function') deck.goToSlide(index);
 
-    // Strategy 1: Direct slide manipulation (most common in generated decks)
+    // Strategy 2: Direct slide manipulation. Set both .active and .visible:
+    // viewport-base.css shows slides on either, and entrance animations are
+    // keyed on .slide.visible.
     slides.forEach((slide, idx) => {
       if (idx === index) {
         slide.style.display = '';
@@ -239,37 +260,30 @@ for (let i = 0; i < slideCount; i++) {
         slide.style.visibility = 'visible';
         slide.style.position = 'relative';
         slide.style.transform = 'none';
-        slide.classList.add('active');
+        slide.classList.add('active', 'visible');
       } else {
         slide.style.display = 'none';
-        slide.classList.remove('active');
+        slide.classList.remove('active', 'visible');
       }
     });
-
-    // Strategy 2: If there's a SlidePresentation class instance, use it
-    if (window.presentation && typeof window.presentation.goToSlide === 'function') {
-      window.presentation.goToSlide(index);
-    }
 
     // Strategy 3: Scroll-based (some decks use scroll snapping)
     slides[index]?.scrollIntoView({ behavior: 'instant' });
   }, i);
 
-  // Wait for any slide transition animations to finish
+  // Let layout and any canvas/JS-driven effects settle
   await page.waitForTimeout(300);
 
-  // Wait for intersection observer animations to trigger
-  await page.waitForTimeout(200);
-
-  // Force all .reveal elements on the current slide to be visible
-  // (animations normally trigger on scroll/intersection, but we need them visible now)
+  // Force reveal-style elements on the current slide to their end state
+  // (covers .reveal, .reveal-scale, .reveal-left, .reveal-blur, etc.)
   await page.evaluate((index) => {
     const slides = document.querySelectorAll('.slide');
     const currentSlide = slides[index];
     if (currentSlide) {
-      currentSlide.querySelectorAll('.reveal').forEach(el => {
+      currentSlide.querySelectorAll('[class*="reveal"]').forEach(el => {
         el.style.opacity = '1';
         el.style.transform = 'none';
+        el.style.filter = 'none';
         el.style.visibility = 'visible';
       });
     }
@@ -291,7 +305,7 @@ server.close();
 
 console.log('  Assembling PDF...');
 
-const browser2 = await chromium.launch();
+const browser2 = await chromium.launch(LAUNCH_OPTS);
 const pdfPage = await browser2.newPage();
 
 // Build an HTML page with all screenshots, one per page
@@ -364,13 +378,20 @@ npm install playwright &>/dev/null || {
     exit 1
 }
 
-# Ensure Chromium browser binary is downloaded
-npx playwright install chromium 2>/dev/null || {
-    err "Failed to install Chromium browser for Playwright."
-    err "Try running manually: npx playwright install chromium"
-    rm -rf "$TEMP_DIR"
-    exit 1
-}
+# Ensure Chromium browser binary is downloaded. If the download fails (offline,
+# firewall, CDN outage) fall back to an installed Google Chrome.
+BROWSER_CHANNEL=""
+if ! npx playwright install chromium 2>/dev/null; then
+    if [[ -d "/Applications/Google Chrome.app" ]] || command -v google-chrome &>/dev/null || command -v google-chrome-stable &>/dev/null; then
+        warn "Chromium download failed — using your installed Google Chrome instead"
+        BROWSER_CHANNEL="chrome"
+    else
+        err "Failed to install Chromium browser for Playwright."
+        err "Try running manually: npx playwright install chromium"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+fi
 ok "Playwright ready"
 echo ""
 
@@ -386,7 +407,7 @@ if [[ "$COMPACT" == "true" ]]; then
     info "Using compact mode (1280×720) for smaller file size"
 fi
 
-node "$TEMP_SCRIPT" "$SERVE_DIR" "$HTML_FILENAME" "$OUTPUT_PDF" "$SCREENSHOT_DIR" "$VIEWPORT_W" "$VIEWPORT_H" || {
+node "$TEMP_SCRIPT" "$SERVE_DIR" "$HTML_FILENAME" "$OUTPUT_PDF" "$SCREENSHOT_DIR" "$VIEWPORT_W" "$VIEWPORT_H" "$BROWSER_CHANNEL" || {
     err "PDF export failed."
     rm -rf "$TEMP_DIR"
     exit 1

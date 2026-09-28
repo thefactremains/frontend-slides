@@ -64,6 +64,12 @@ Baseline limits still apply: no scrolling, no overflow, no overlapping panels, a
 
 ---
 
+## Script Paths
+
+Scripts live in this skill's own `scripts/` folder, not in the user's project. `<skill-dir>` below means the directory that contains this `SKILL.md` (the skill's base directory). Always call scripts by that absolute path, e.g. `bash <skill-dir>/scripts/export-pdf.sh deck.html`.
+
+---
+
 ## Phase 0: Detect Mode
 
 Determine what the user wants:
@@ -78,7 +84,7 @@ When enhancing existing presentations, fixed-stage fitting is the biggest risk:
 
 1. **Before adding content:** Count existing elements, check against density limits
 2. **Adding images:** Fit them inside the 1920×1080 slide canvas. If slide already has max content, split into two slides
-3. **Adding text:** Max 4-6 bullets per slide. Exceeds limits? Split into continuation slides
+3. **Adding text:** Stay within the deck's density mode (low density: 1-3 bullets; high density: 4-8 bullets or 4-6 cards). Exceeds limits? Split into continuation slides
 4. **After ANY modification, verify:** the slide stage remains 16:9, no text overflows its card, no panels overlap, and screenshots look correct at 1280×720 plus one phone viewport
 5. **Proactively reorganize:** If modifications will cause overflow, automatically split content and inform the user. Don't wait to be asked
 
@@ -113,9 +119,9 @@ If user has content, ask them to share it.
 
 ### Step 1.2: Image Evaluation (if images provided)
 
-If user selected "No images" → skip to Phase 2.
+If the user has not provided any images → skip to Phase 2.
 
-If user provides an image folder:
+If user provides images or an image folder:
 
 1. **Scan** — List all image files (.png, .jpg, .svg, .webp, etc.)
 2. **Inspect each image** — Use the agent's available image-understanding capability. If image reading is unavailable, use filenames/metadata and ask the user to clarify only when needed
@@ -175,7 +181,7 @@ Read [STYLE_PRESETS.md](STYLE_PRESETS.md) for safe preset candidates. If [bold-t
 - Keep the three previews genuinely different from each other.
 - After choosing bold template candidate(s), read only those candidate(s)' `preview.md` files from the `preview_md` paths in the selection index.
 - Use `preview.md` only for title-slide previews. Do not read full `design.md` files until the user picks the final template.
-- Do not read or copy `template.html` unless the selected final `design.md` is missing a critical implementation detail.
+- `template.html` files from the source template library are not bundled with this skill. Work from `design.md`; if it is missing a detail, make a decision consistent with its fonts, palette, and component grammar.
 
 **Preview authenticity rules (NON-NEGOTIABLE):**
 
@@ -221,7 +227,6 @@ If the user selected a bold template from `bold-template-pack`, read that one te
 - Treat viewport-fluid values in `design.md` as design proportions to translate into 1920×1080 stage coordinates. Do not keep them as live viewport reflow rules in the final deck.
 - Keep the output as a single self-contained Frontend Slides HTML file.
 - Do not copy demo slide content or mimic the source template too literally.
-- Use `template.html` only as a last-resort implementation reference for the selected template.
 - After generating, verify both content overflow and panel overlap in rendered browser screenshots. `scrollHeight` checks alone are not enough because grid panels can visually cover each other.
 
 If the user selected a self-generated custom wildcard, treat that preview's CSS and layout as the design recipe:
@@ -251,22 +256,22 @@ If the user selected a self-generated custom wildcard, treat that preview's CSS 
 
 When converting PowerPoint files:
 
-1. **Extract content** — Run `python scripts/extract-pptx.py <input.pptx> <output_dir>` (install python-pptx if needed: `pip install python-pptx`)
+1. **Extract content** — Run `python3 <skill-dir>/scripts/extract-pptx.py <input.pptx> <output_dir>` (install python-pptx if needed: `pip install python-pptx`). Text inside grouped shapes, table cells (as `"type": "table"` rows), and pictures in picture placeholders are included. Charts, SmartArt, and linked (non-embedded) images are not extracted — tell the user if the source deck uses them
 2. **Confirm with user** — Present extracted slide titles, content summaries, and image counts
 3. **Style selection** — Proceed to Phase 2 for style discovery
-4. **Generate HTML** — Convert to chosen style, preserving all text, images (from assets/), slide order, and speaker notes (as HTML comments)
+4. **Generate HTML** — Convert to chosen style, preserving all text, tables, images (from assets/), slide order, and speaker notes (as HTML comments)
 
 ---
 
 ## Phase 5: Delivery
 
 1. **Clean up** — Delete `.frontend-slides/slide-previews/` if it exists
-2. **Open** — Use `open [filename].html` to launch in browser
+2. **Open** — Launch it in the browser (`open [filename].html` on macOS, `xdg-open` on Linux, `start` on Windows)
 3. **Summarize** — Tell the user:
    - File location, style name, slide count
    - Navigation: Arrow keys, Space, swipe/tap if enabled
    - How to customize: `:root` CSS variables for colors, font link for typography, `.reveal` class for animations
-   - Inline text editing is available: Hover top-left corner or press E to enter edit mode, click any text to edit, Ctrl+S to save
+   - Inline text editing is available: Hover top-left corner or press E to enter edit mode, click any text to edit, Ctrl/Cmd+S to save
    - Offer the natural post-draft actions: ask for revisions, edit text directly in the browser, or export/share
 
 ---
@@ -303,10 +308,10 @@ This deploys the presentation to Vercel — a free hosting platform. The link wo
 3. **Deploy** — Run the deploy script:
 
    ```bash
-   bash scripts/deploy.sh <path-to-presentation>
+   bash <skill-dir>/scripts/deploy.sh <path-to-presentation>
    ```
 
-   The script accepts either a folder (with index.html) or a single HTML file.
+   The script accepts either a folder (with index.html) or a single HTML file. For a single file it uploads only the HTML plus the local files it references (and an `assets/` folder next to it, if present). For a folder it uploads **everything in that folder** — make sure it contains nothing private.
 
 4. **Share the URL** — Tell the user:
    - The live URL (from the script output)
@@ -317,7 +322,7 @@ This deploys the presentation to Vercel — a free hosting platform. The link wo
 **⚠ Deployment gotchas:**
 
 - **Local images/videos must travel with the HTML.** The deploy script auto-detects files referenced via `src="..."` in the HTML and bundles them. But if the presentation references files via CSS `background-image` or unusual paths, those may be missed. **Before deploying, verify:** open the deployed URL and check that all images load. If any are broken, the safest fix is to put the HTML and all its assets into a single folder and deploy the folder instead of a standalone HTML file.
-- **Prefer folder deployments when the presentation has many assets.** If the presentation lives in a folder with images alongside it (e.g., `my-deck/index.html` + `my-deck/logo.png`), deploy the folder directly: `bash scripts/deploy.sh ./my-deck/`. This is more reliable than deploying a single HTML file because the entire folder contents are uploaded as-is.
+- **Prefer folder deployments when the presentation has many assets.** If the presentation lives in a folder with images alongside it (e.g., `my-deck/index.html` + `my-deck/logo.png`), deploy the folder directly: `bash <skill-dir>/scripts/deploy.sh ./my-deck/`. This is more reliable than deploying a single HTML file because the entire folder contents are uploaded as-is.
 - **Filenames with spaces work but can cause issues.** The script handles spaces in filenames, but Vercel URLs encode spaces as `%20`. If possible, avoid spaces in image filenames. If the user's images have spaces, the script handles it — but if images still break, renaming files to use hyphens instead of spaces is the fix.
 - **Redeploying updates the same URL.** Running the deploy script again on the same presentation overwrites the previous deployment. The URL stays the same — no need to share a new link.
 
@@ -330,7 +335,7 @@ This captures each slide as a screenshot and combines them into a PDF. Perfect f
 1. **Run the export script:**
 
    ```bash
-   bash scripts/export-pdf.sh <path-to-html> [output.pdf]
+   bash <skill-dir>/scripts/export-pdf.sh <path-to-html> [output.pdf]
    ```
 
    If no output path is given, the PDF is saved next to the HTML file.
@@ -339,7 +344,7 @@ This captures each slide as a screenshot and combines them into a PDF. Perfect f
    - A headless browser opens the presentation at 1920×1080 (standard widescreen)
    - It screenshots each slide one by one
    - All screenshots are combined into a single PDF
-   - The script needs Playwright (a browser automation tool) — it will install automatically if missing
+   - The script needs Playwright (a browser automation tool) — it will install automatically if missing. If Playwright's Chromium download fails, it falls back to an installed Google Chrome
 
 3. **If Playwright installation fails:**
    - The most common issue is Chromium not downloading. Run: `npx playwright install chromium`
@@ -352,13 +357,13 @@ This captures each slide as a screenshot and combines them into a PDF. Perfect f
 
 **⚠ PDF export gotchas:**
 
-- **First run is slow.** The script installs Playwright and downloads a Chromium browser (~150MB) into a temp directory. This happens once per run. Warn the user it may take 30-60 seconds the first time — subsequent exports within the same session are faster.
+- **First run is slow.** The script installs Playwright into a temp directory on every run and downloads Chromium (~150MB) into Playwright's shared browser cache the first time. Warn the user it may take 30-60 seconds the first time — subsequent exports within the same session are faster.
 - **Slides must use `class="slide"`.** The export script finds slides by querying `.slide` elements. If the presentation uses a different class name, the script will report "0 slides found" and fail. All presentations generated by this skill use `.slide`, so this only matters for externally-created HTML.
 - **Local images must be loadable via HTTP.** The script starts a local server and loads the HTML through it (so Google Fonts and relative image paths work). If images use absolute filesystem paths (e.g., `src="/Users/name/photo.png"`) instead of relative paths (e.g., `src="photo.png"`), they won't load. Generated presentations always use relative paths, but converted or user-provided decks might not — check and fix if needed.
 - **Local images appear in the PDF** as long as they are in the same directory as (or relative to) the HTML file. The export script serves the HTML's parent directory over HTTP, so relative paths like `src="photo.png"` resolve correctly — including filenames with spaces. If images still don't appear, check: (1) the image files actually exist at the referenced path, (2) the paths are relative, not absolute filesystem paths like `/Users/name/photo.png`.
 - **Large presentations produce large PDFs.** Each slide is captured as a full 1920×1080 PNG screenshot. An 18-slide deck can produce a ~20MB PDF. If the PDF exceeds 10MB, ask the user: _"The PDF is [size]. Would you like me to compress it? It'll look slightly less sharp but the file will be much smaller."_ If yes, re-run the export with the `--compact` flag:
   ```bash
-  bash scripts/export-pdf.sh <path-to-html> [output.pdf] --compact
+  bash <skill-dir>/scripts/export-pdf.sh <path-to-html> [output.pdf] --compact
   ```
   This renders at 1280×720 instead of 1920×1080, typically cutting file size by 50-70% with minimal visual difference.
 

@@ -77,6 +77,11 @@ svg {
 }
 
 /* 7. Print one fixed-size slide per page */
+@page {
+    size: 1920px 1080px;
+    margin: 0;
+}
+
 @media print {
     html,
     body {
@@ -115,6 +120,15 @@ svg {
     .slide:last-child {
         break-after: auto;
         page-break-after: auto;
+    }
+
+    /* Entrance animations only run on the active slide. Show their end
+       state on every printed slide instead of printing hidden content. */
+    .slide [class*="reveal"] {
+        opacity: 1 !important;
+        transform: none !important;
+        filter: none !important;
+        transition: none !important;
     }
 
     .deck-controls {

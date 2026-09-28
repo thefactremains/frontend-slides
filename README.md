@@ -75,7 +75,13 @@ Claude.ai, the Claude desktop app and Cowork use the skills on your Claude accou
 cd /tmp/frontend-slides/plugins/frontend-slides/skills && zip -qr ~/Desktop/frontend-slides-skill.zip frontend-slides -x '*.DS_Store'
 ```
 
-In the Claude app, open the Skills settings, choose to upload a skill, and select `frontend-slides-skill.zip`. Code execution must be enabled for the scripts (PowerPoint extraction, PDF export, deploy) to run.
+Then, in the Claude app:
+
+1. Open **Settings → Customize → Skills**.
+2. Click **+ Add → Upload skill**.
+3. Drag `frontend-slides-skill.zip` into the **Skill file** box (or click browse), then click **Upload**.
+
+The upload accepts a `.zip` or `.skill` file that includes a `SKILL.md`. Once uploaded, the skill is available in chat and Cowork. The scripts (PowerPoint extraction, PDF export, deploy) need code execution to be enabled.
 
 ### Other coding agents
 
